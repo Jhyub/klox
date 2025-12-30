@@ -41,12 +41,27 @@ object Lox {
     }
 
     private fun run(source: String) {
+        val scanner = Scanner(source)
+        val tokens = scanner.scanTokens()
+        val parser = Parser(tokens)
+        val expr = parser.parse()
 
+        if (hadError) return
+
+        println(expr?.let { AstPrinter.print(it) })
     }
 
     fun error(line: Int, message: String) {
         report(line, "", message)
 
+    }
+
+    fun error(token: Token, message: String) {
+        if (token.type == TokenType.EOF) {
+            report(token.line, "at end", message)
+        } else {
+            report(token.line, "at '${token.lexeme}'", message)
+        }
     }
 
     private fun report(line: Int, where: String, message: String) {
