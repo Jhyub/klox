@@ -20,12 +20,16 @@ fun main(args: Array<String>) {
 
 object Lox {
     private var hadError = false
+    private var hadRuntimeError = false
+
+    private val interpreter = Interpreter()
 
     fun runFile(path: String) {
         val bytes = Files.readAllBytes(Paths.get(path))
         run(String(bytes, Charset.defaultCharset()))
 
         if (hadError) exitProcess(65)
+        if (hadRuntimeError) exitProcess(70)
     }
 
     fun runPrompt() {
@@ -48,7 +52,7 @@ object Lox {
 
         if (hadError) return
 
-        println(expr?.let { AstPrinter.print(it) })
+        interpreter.interpret(expr)
     }
 
     fun error(line: Int, message: String) {
@@ -67,5 +71,10 @@ object Lox {
     private fun report(line: Int, where: String, message: String) {
         System.err.println("[line $line] Error $where: $message")
         hadError = true
+    }
+
+    fun runtimeError(error: RuntimeError) {
+        System.err.println("${error.message}\n[line ${error.token.line}]")
+        hadRuntimeError = true
     }
 }
