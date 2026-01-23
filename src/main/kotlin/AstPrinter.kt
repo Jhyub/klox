@@ -1,6 +1,6 @@
 package dev.jhyub.klox
 
-object AstPrinter: Visitor<String> {
+object AstPrinter: Expr.Visitor<String> {
     fun print(expr: Expr): String {
         return expr.accept(AstPrinter)
     }

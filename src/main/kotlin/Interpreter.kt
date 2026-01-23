@@ -2,7 +2,7 @@ package dev.jhyub.klox
 
 import dev.jhyub.klox.TokenType.*
 
-class Interpreter: Visitor<Any?> {
+class Interpreter: Expr.Visitor<Any?> {
     private fun evaluate(expr: Expr?): Any? {
         return expr?.accept(this)
     }
