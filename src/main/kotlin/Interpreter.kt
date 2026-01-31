@@ -3,7 +3,20 @@ package dev.jhyub.klox
 import dev.jhyub.klox.TokenType.*
 
 class Interpreter: Expr.Visitor<Any?>, Stmt.Visitor<Unit> {
-    private var environment = Environment()
+    val globals = Environment()
+    private var environment = globals
+
+    init {
+        globals.define("clock", object: LoxCallable {
+            override fun arity(): Int = 0
+
+            override fun call(interpreter: Interpreter, arguments: List<Any?>): Any {
+                return System.currentTimeMillis().toDouble() / 1000.0
+            }
+
+            override fun toString(): String = "<native fn>"
+        })
+    }
 
     private fun evaluate(expr: Expr?): Any? {
         return expr?.accept(this)
@@ -36,6 +49,24 @@ class Interpreter: Expr.Visitor<Any?>, Stmt.Visitor<Unit> {
         val value = evaluate(expr.value)
         environment.assign(expr.name, value)
         return value
+    }
+
+    override fun visitCallExpr(expr: Expr.Call): Any? {
+        val function = evaluate(expr.callee)
+        if (function !is LoxCallable) {
+            throw RuntimeError(expr.paren, "Can only call functions and classes.")
+        }
+
+        val arguments = mutableListOf<Any?>()
+        for (argument in expr.arguments) {
+            arguments.add(evaluate(argument))
+        }
+
+        if (arguments.size != function.arity()) {
+            throw RuntimeError(expr.paren, "Expected ${function.arity()} arguments but got ${arguments.size}.")
+        }
+
+        return function.call(this, arguments)
     }
 
     override fun visitLiteralExpr(expr: Expr.Literal): Any? {
@@ -121,6 +152,11 @@ class Interpreter: Expr.Visitor<Any?>, Stmt.Visitor<Unit> {
         evaluate(stmt.expr)
     }
 
+    override fun visitFunctionStmt(stmt: Stmt.Function) {
+        val function = LoxFunction(stmt, environment)
+        environment.define(stmt.name.lexeme, function)
+    }
+
     override fun visitIfStmt(stmt: Stmt.If) {
         if (isTruthy(evaluate(stmt.condition))) {
             execute(stmt.thenBranch)
@@ -131,6 +167,10 @@ class Interpreter: Expr.Visitor<Any?>, Stmt.Visitor<Unit> {
 
     override fun visitPrintStmt(stmt: Stmt.Print) {
         println(stringify(evaluate(stmt.expr)))
+    }
+
+    override fun visitReturnStmt(stmt: Stmt.Return) {
+        throw Return(stmt.value?.let { evaluate(it) })
     }
 
     override fun visitWhileStmt(stmt: Stmt.While) {
@@ -148,7 +188,7 @@ class Interpreter: Expr.Visitor<Any?>, Stmt.Visitor<Unit> {
         stmt?.accept(this)
     }
 
-    private fun executeBlock(statements: List<Stmt?>, environment: Environment) {
+    fun executeBlock(statements: List<Stmt?>, environment: Environment) {
         val previous = this.environment
         try {
             this.environment = environment
