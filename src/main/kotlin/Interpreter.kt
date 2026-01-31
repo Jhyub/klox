@@ -2,7 +2,9 @@ package dev.jhyub.klox
 
 import dev.jhyub.klox.TokenType.*
 
-class Interpreter: Expr.Visitor<Any?> {
+class Interpreter: Expr.Visitor<Any?>, Stmt.Visitor<Unit> {
+    private var environment = Environment()
+
     private fun evaluate(expr: Expr?): Any? {
         return expr?.accept(this)
     }
@@ -30,15 +32,21 @@ class Interpreter: Expr.Visitor<Any?> {
         throw RuntimeError(operator, "Operands must be a number.")
     }
 
-    override fun visitLiteral(expr: Expr.Literal): Any? {
+    override fun visitAssignExpr(expr: Expr.Assign): Any? {
+        val value = evaluate(expr.value)
+        environment.assign(expr.name, value)
+        return value
+    }
+
+    override fun visitLiteralExpr(expr: Expr.Literal): Any? {
         return expr.value
     }
 
-    override fun visitGrouping(expr: Expr.Grouping): Any? {
+    override fun visitGroupingExpr(expr: Expr.Grouping): Any? {
         return evaluate(expr.expr)
     }
 
-    override fun visitUnary(expr: Expr.Unary): Any? {
+    override fun visitUnaryExpr(expr: Expr.Unary): Any? {
         val right = evaluate(expr.right)
 
         return when(expr.operator.type) {
@@ -51,7 +59,11 @@ class Interpreter: Expr.Visitor<Any?> {
         }
     }
 
-    override fun visitBinary(expr: Expr.Binary): Any? {
+    override fun visitVariableExpr(expr: Expr.Variable): Any? {
+        return environment.get(expr.name)
+    }
+
+    override fun visitBinaryExpr(expr: Expr.Binary): Any? {
         val left = evaluate(expr.left)
         val right = evaluate(expr.right)
 
@@ -89,10 +101,45 @@ class Interpreter: Expr.Visitor<Any?> {
         return obj.toString()
     }
 
-    fun interpret(expression: Expr?) {
+    override fun visitBlockStmt(stmt: Stmt.Block) {
+        executeBlock(stmt.statements, Environment(environment))
+    }
+
+    override fun visitExpressionStmt(stmt: Stmt.Expression) {
+        evaluate(stmt.expr)
+    }
+
+    override fun visitPrintStmt(stmt: Stmt.Print) {
+        println(stringify(evaluate(stmt.expr)))
+    }
+
+    override fun visitVarStmt(stmt: Stmt.Var) {
+        val value = stmt.initializer?.let { evaluate(it) }
+        environment.define(stmt.name.lexeme, value)
+    }
+
+    private fun execute(stmt: Stmt?) {
+        stmt?.accept(this)
+    }
+
+    private fun executeBlock(statements: List<Stmt?>, environment: Environment) {
+        val previous = this.environment
         try {
-            val value = evaluate(expression)
-            println(stringify(value))
+            this.environment = environment
+
+            for (statement in statements) {
+                execute(statement)
+            }
+        } finally {
+            this.environment = previous
+        }
+    }
+
+    fun interpret(statements: List<Stmt?>) {
+        try {
+            for (statement in statements) {
+                execute(statement)
+            }
         } catch (e: RuntimeError) {
             Lox.runtimeError(e)
         }

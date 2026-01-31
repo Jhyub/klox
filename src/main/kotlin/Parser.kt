@@ -65,7 +65,25 @@ class Parser(private val tokens: List<Token>) {
     }
 
     private fun expression(): Expr {
-        return equality()
+        return assignment()
+    }
+
+    private fun assignment(): Expr {
+        val expr = equality()
+
+        if (match(EQUAL)) {
+            val equals = previous()
+            val value = assignment()
+
+            if (expr is Expr.Variable) {
+                val name = expr.name
+                return Expr.Assign(name, value)
+            }
+
+            error(equals, "Invalid assignment target.")
+        }
+
+        return expr
     }
 
     private fun equality(): Expr {
@@ -135,6 +153,10 @@ class Parser(private val tokens: List<Token>) {
             return Expr.Literal(previous().literal)
         }
 
+        if (match(IDENTIFIER)) {
+            return Expr.Variable(previous())
+        }
+
         if (match(LEFT_PAREN)) {
             val expr = expression()
             consume(RIGHT_PAREN, "Expected ')' after expression")
@@ -144,12 +166,62 @@ class Parser(private val tokens: List<Token>) {
         throw error(peek(), "Expceted expression")
     }
 
-    fun parse(): Expr? {
-        return try {
-            expression()
-        } catch (e: ParseError) {
-            null
+    private fun expressionStatement(): Stmt {
+        val expr = expression()
+        consume(SEMICOLON, "Expected ';' after expression.")
+        return Stmt.Expression(expr)
+    }
+
+    private fun printStatement(): Stmt {
+        val value = expression()
+        consume(SEMICOLON, "Expected ';' after value.")
+        return Stmt.Print(value)
+    }
+
+    private fun block(): List<Stmt?> {
+        val ret = mutableListOf<Stmt?>()
+
+        while (!check(RIGHT_BRACE) && !isAtEnd()) {
+            ret.add(declaration())
         }
+
+        consume(RIGHT_BRACE, "Expected '}' after block.")
+        return ret
+    }
+
+    private fun statement(): Stmt {
+        if (match(PRINT)) return printStatement()
+        if (match(LEFT_BRACE)) return Stmt.Block(block())
+
+        return expressionStatement()
+    }
+
+    private fun varDeclaration(): Stmt {
+        val name = consume(IDENTIFIER, "Expected variable name.")
+        val initializer = if (match(EQUAL)) expression() else null
+
+        consume(SEMICOLON, "Expected ';' after variable declaration.")
+        return Stmt.Var(name, initializer)
+    }
+
+    private fun declaration(): Stmt? {
+        try {
+            if (match(VAR)) return varDeclaration()
+            return statement()
+        } catch (e: ParseError) {
+            synchronize()
+            return null
+        }
+    }
+
+    fun parse(): List<Stmt?> {
+        val ret = mutableListOf<Stmt?>()
+
+        while (!isAtEnd()) {
+            ret.add(declaration())
+        }
+
+        return ret
     }
 
 }
