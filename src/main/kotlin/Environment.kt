@@ -13,8 +13,20 @@ class Environment(val enclosing: Environment? = null) {
         }
     }
 
+    fun assignAt(distance: Int, name: Token, value: Any?) {
+        ancestor(distance)?.values?.put(name.lexeme, value)
+    }
+
     fun define(name: String, value: Any?) {
         values[name] = value
+    }
+
+    fun ancestor(distance: Int): Environment? {
+        var ret: Environment? = this
+        for (i in 0 until distance) {
+            ret = ret?.enclosing
+        }
+        return ret
     }
 
     fun get(name: Token) : Any? {
@@ -25,5 +37,9 @@ class Environment(val enclosing: Environment? = null) {
         if (enclosing != null) return enclosing.get(name)
 
         throw RuntimeError(name, "Undefined variable '${name.lexeme}'.")
+    }
+
+    fun getAt(distance: Int, name: String): Any? {
+        return ancestor(distance)?.values[name]
     }
 }

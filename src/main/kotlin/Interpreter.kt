@@ -5,6 +5,7 @@ import dev.jhyub.klox.TokenType.*
 class Interpreter: Expr.Visitor<Any?>, Stmt.Visitor<Unit> {
     val globals = Environment()
     private var environment = globals
+    private val locals: MutableMap<Expr, Int> = mutableMapOf()
 
     init {
         globals.define("clock", object: LoxCallable {
@@ -47,7 +48,9 @@ class Interpreter: Expr.Visitor<Any?>, Stmt.Visitor<Unit> {
 
     override fun visitAssignExpr(expr: Expr.Assign): Any? {
         val value = evaluate(expr.value)
-        environment.assign(expr.name, value)
+
+        val dist = locals[expr]
+        dist?.let { environment.assignAt(dist, expr.name, value) } ?: globals.assign(expr.name, value)
         return value
     }
 
@@ -102,8 +105,13 @@ class Interpreter: Expr.Visitor<Any?>, Stmt.Visitor<Unit> {
         }
     }
 
+    private fun lookUpVariable(name: Token, expr: Expr): Any? {
+        val distance = locals[expr]
+        return distance?.let { environment.getAt(it, name.lexeme) } ?: globals.get(name)
+    }
+
     override fun visitVariableExpr(expr: Expr.Variable): Any? {
-        return environment.get(expr.name)
+        return lookUpVariable(expr.name, expr)
     }
 
     override fun visitBinaryExpr(expr: Expr.Binary): Any? {
@@ -199,6 +207,10 @@ class Interpreter: Expr.Visitor<Any?>, Stmt.Visitor<Unit> {
         } finally {
             this.environment = previous
         }
+    }
+
+    fun resolve(expr: Expr?, depth: Int) {
+        expr?.let { locals.put(it, depth) }
     }
 
     fun interpret(statements: List<Stmt?>) {
